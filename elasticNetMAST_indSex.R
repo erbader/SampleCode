@@ -4,9 +4,9 @@ gc()
 
 # Build TRS model for single iteration
 
-#############################
-#	Command line arguments 	#
-#############################
+#################################
+# 	Command line arguments 	#
+#################################
 args <- commandArgs(trailingOnly = TRUE)
 cluster <- args[1]
 sex <- args[2]
@@ -15,9 +15,9 @@ fold <- args[4]
 out_file <- args[5]
 print(args)
 
-#####################
+#########################
 #	Load libraries 	#
-#####################
+#########################
 library(MAST)
 library(Matrix)
 library(plyr)
@@ -42,9 +42,9 @@ options(expressions = 5e5)
 options(mc.cores = detectCores()- 1)
 print(packageVersion("MAST"))
 
-#################
+#########################
 #	Load data 	#
-#################
+#########################
 md <- read.csv("/.mounts/labs/awadallalab/scratch/ebader/CPTP_scRNAseq/ohs_phenotypes.csv", stringsAsFactors=FALSE, header = TRUE)
 exp <- readRDS(paste0("/.mounts/labs/awadallalab/scratch/ebader/CPTP_scRNAseq/secondary_analysis/TRSnoGenetics/perInd/cluster",cluster,"_avgExpMat.Rds"))
 
@@ -54,26 +54,26 @@ sample_ids <- read.table(paste0("/.mounts/labs/awadallalab/scratch/ebader/CPTP_s
 
 #````````````````````````````````````````````` DGE TESTING WITH MAST ```````````````````````````````````````````````````
 	
-#############################
-#	Filter expression data 	# 
-#############################
+#################################
+#	Filter expression data	# 
+#################################
 	# Include training samples only
 	ids_train <- sample_ids %>% filter(dataset == "train" & scRNA.MISO.ID %in% dimnames(exp)[[2]])
 	exp_train <- exp[ ,which(dimnames(exp)[[2]] %in% ids_train$scRNA.MISO.ID)]
 
 
-#################
+#########################
 #	Covariates 	#
-#################
+#########################
 	md$group <- as.factor(ifelse(md$RiskGroup %in% c(1,3), "healthy","unhealthy"))
 	dge_cov <- md %>%
 			filter(scRNA.MISO.ID %in% ids_train$scRNA.MISO.ID) %>%
 	                select(scRNA.MISO.ID, batch,group,RiskGroup,age_visit,Sex)
 
 
-##################################
-# 	Filter lowly expressed genes #
-##################################
+#########################################
+# 	Filter lowly expressed genes 	#
+#########################################
 	# Remove genes expressed in less than 10% of samples from either group
 	healthy_ids <- dge_cov %>% filter(group == "healthy")
 	s1 <- exp_train[ ,which(dimnames(exp_train)[[2]] %in% healthy_ids$scRNA.MISO.ID)]
@@ -91,13 +91,13 @@ sample_ids <- read.table(paste0("/.mounts/labs/awadallalab/scratch/ebader/CPTP_s
 	print(length(genes_keep))
 	exp_train <- exp_train[genes_keep, ]
 
-################################
-## MAST DGE modelling
-################################
+#################################
+#	MAST DGE modelling 	#
+#################################
     # Create feature-level dataframe
-    gene_ids <- read.table("/.mounts/labs/awadallalab/scratch/EpiCan/CPTP_scRNASeq/features.tsv", header = FALSE, sep = "\t", col.name = c("ensg_id", "hugo","feature_type"), stringsAsFactors = FALSE)
+    	gene_ids <- read.table("/.mounts/labs/awadallalab/scratch/EpiCan/CPTP_scRNASeq/features.tsv", header = FALSE, sep = "\t", col.name = c("ensg_id", "hugo","feature_type"), stringsAsFactors = FALSE)
 	gene_ids <- gene_ids %>% tibble::column_to_rownames('ensg_id')
-    f = gene_ids[which(rownames(gene_ids) %in% dimnames(exp_train)[[1]]), ]
+    	f = gene_ids[which(rownames(gene_ids) %in% dimnames(exp_train)[[1]]), ]
 	
 	# Create single-cell assay obj
 	dge_cov <- dge_cov %>% arrange(scRNA.MISO.ID)
@@ -105,7 +105,7 @@ sample_ids <- read.table(paste0("/.mounts/labs/awadallalab/scratch/ebader/CPTP_s
 	sca <- MAST::FromMatrix(exp_train, cData = dge_cov, fData = f)
 	zlmGroup <- zlm(~ group + age_visit + batch, sca) # No need for random effects here bc there is no repeated measures
 	zlmGroup.sum <- summary(zlmGroup, doLRT = "groupunhealthy")
-    gene_ids <- gene_ids %>% tibble::rownames_to_column("primerid")
+    	gene_ids <- gene_ids %>% tibble::rownames_to_column("primerid")
 	
 	# Combine with HUGO ids
 	zlmGroupDt <- zlmGroup.sum$datatable
@@ -137,9 +137,9 @@ sample_ids <- read.table(paste0("/.mounts/labs/awadallalab/scratch/ebader/CPTP_s
 	# Save row indices of train data to identify them for fitting elastic net
 		train_idx <- which(df$scRNA.MISO.ID %in% ids_train$scRNA.MISO.ID)
 
-#############
+#################
 # 	Caret 	#
-#############
+#################
 	# Set training parameters
 	tc <- trainControl(sampling = "up",
 			   index = list(train_idx),
@@ -148,13 +148,13 @@ sample_ids <- read.table(paste0("/.mounts/labs/awadallalab/scratch/ebader/CPTP_s
                            savePredictions = TRUE)
 	# Grid search to optimize lambda and alpha
 	myGrid <- expand.grid(alpha = seq(0,1, length = 11), lambda = 10^seq(-3, 2, length = 50))
-    mod <- caret::train(form = group ~ . -scRNA.MISO.ID ,
+    	mod <- caret::train(form = group ~ . -scRNA.MISO.ID ,
 			    		data = df,
-                        method = "glmnet", 
-                        preProcess = c("center","scale"),
-                        na.action = "na.omit", 
-                        trControl = tc, 
-                        tuneGrid = myGrid,
+                       			method = "glmnet", 
+                        		preProcess = c("center","scale"),
+                        		na.action = "na.omit", 
+                        		trControl = tc, 
+                        		tuneGrid = myGrid,
 			    		metric = "ROC")
 
 # If optimal lambda is 100 (max lambda) re-run with a new grid covering larger lambda values
@@ -174,5 +174,5 @@ sample_ids <- read.table(paste0("/.mounts/labs/awadallalab/scratch/ebader/CPTP_s
 # Save the model
 saveRDS(mod, file = paste0("../perInd/results/sex/cluster",cluster,"/elasticNet_",out_file,"_mod.Rds"))
 
-#````````````````````````````````````````````` FIN ```````````````````````````````````````````````
+#````````````````````````````````````````````` FIN ```````````````````````````````````````````````#
 	
